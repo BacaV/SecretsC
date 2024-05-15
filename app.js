@@ -3,8 +3,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
-const encrypt = require('mongoose-encryption');
-
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
 
 const app = express();
 
@@ -19,9 +19,6 @@ const userSchema = new mongoose.Schema ({
     password: String
 });
 
-const secret = process.env.SECRET;
-
-userSchema.plugin(encrypt, {secret: secret, encryptedFields: ['password']})
 
 const User = new mongoose.model("User", userSchema);
 
@@ -29,6 +26,8 @@ const User = new mongoose.model("User", userSchema);
 app.get("/", function(req,res){
     res.render("home");
 });
+
+//------------LOGIN ROUTE-------------
 
 app.route("/login")
     .get(function(req, res){
@@ -42,9 +41,14 @@ app.route("/login")
             let foundUser = await User.findOne({ email : user});
 
             if(foundUser){
-                if(foundUser.password === pass){
-                    res.render("secrets");
-                }
+                bcrypt.compare(pass, foundUser.password, function(err, result) {
+                    if(result === true){
+                        res.render("secrets");
+                    } else{
+                        console.log("Email or pass incorrect.");
+                    }
+                    
+                });
             }
 
 
@@ -70,17 +74,26 @@ app.route("/register")
     .post(async(req, res) => {
         try{
 
-            let mail = req.body.username;
-            let pass = req.body.password;
+            bcrypt.hash(req.body.password, saltRounds, async(err, hash) => {
+                try{
+                    let mail = req.body.username;
+                    let pass = hash;
 
-            const newUser = new User({
-                email: mail,
-                password: pass
+                    const newUser = new User({
+                        email: mail,
+                        password: pass
+                    });
+
+                    await newUser.save();
+
+                    res.render("secrets");
+                } catch(err){
+                    console.log(err);
+                }
+                
             });
 
-            await newUser.save();
-
-            res.render("secrets");
+            
 
         } catch(err){
 
@@ -90,6 +103,7 @@ app.route("/register")
     });
 
 //----------------------------------------------------------
+
 app.listen(3000, function(){
     console.log('Get ready for secrets!');
 });
